@@ -26,9 +26,10 @@ class Planet(db.Model, SerializerMixin):
     nearest_star = db.Column(db.String)
 
     # Add relationship
-
+    missions = db.relationship("Mission", back_populates="planet", cascade="all, delete-orphan")
+    scientists = association_proxy("missions", "scientist")
     # Add serialization rules
-
+    serialize_rules = ("-missions.planet", "-scientists.planets")
 
 class Scientist(db.Model, SerializerMixin):
     __tablename__ = 'scientists'
@@ -38,23 +39,58 @@ class Scientist(db.Model, SerializerMixin):
     field_of_study = db.Column(db.String)
 
     # Add relationship
-
+    missions = db.relationship("Mission", back_populates="scientist", cascade="all, delete-orphan")
+    planets = association_proxy("missions", "planet")
     # Add serialization rules
-
+    serialize_rules = ("-planets.scientists", "-missions.scientist")
     # Add validation
-
-
+    @validates('name')
+    def validate_name(self, _, value):
+        if not value:
+            raise ValueError("Name must be provided")
+        return value
+    
+    @validates('field_of_study')
+    def validate_field_of_study(self, _, value):
+        if not value:
+            raise ValueError("Field of study must be provided")
+        return value
+    
 class Mission(db.Model, SerializerMixin):
     __tablename__ = 'missions'
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String)
+    scientist_id = db.Column(db.Integer, db.ForeignKey("scientists.id"))
+    planet_id = db.Column(db.Integer, db.ForeignKey("planets.id"))
 
     # Add relationships
-
+    scientist = db.relationship("Scientist", back_populates='missions')
+    planet = db.relationship("Planet", back_populates="missions")
+    
     # Add serialization rules
-
+    serialize_rules = ("-planet.missions", "-scientist.missions")
     # Add validation
+    @validates('name')
+    def validate_name(self, _, value):
+        if not value:
+            raise ValueError("Name must be provided")
+        return value
+    
+    
+    @validates('scientist_id')
+    def validate_scientist_id(self, _, scientist_id):
+        if not scientist_id:
+            raise ValueError("scientist id must be present")
+        return scientist_id
+    
+    @validates('planet_id')
+    def validate_planet_id(self, _, planet_id):
+        if not planet_id:
+            raise ValueError("planet id must be present")
+        return planet_id
+    
+    
 
 
 # add any models you may need.

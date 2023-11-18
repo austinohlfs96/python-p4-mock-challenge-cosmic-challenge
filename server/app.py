@@ -20,11 +20,96 @@ migrate = Migrate(app, db)
 
 db.init_app(app)
 
+api = Api(app)
+
 
 @app.route('/')
 def home():
     return ''
 
+class Scientists(Resource):
+    def get(self):
+        try:
+            scientist_data = [scientist.to_dict(rules=("-missions",)) for scientist in Scientist.query.all()]
+            return make_response(scientist_data, 200)
+        except Exception as e:
+            return make_response({"errors:", str(e)}, 400)
+        
+    def post(self):
+        try:
+            new_scientist = Scientist(
+                name = request.get_json()['name'], 
+                field_of_study = request.get_json()['field_of_study'],
+            )
+            db.session.add(new_scientist)
+            db.session.commit()
+            return make_response(new_scientist.to_dict(rules=("-missions",)), 201)
+        except ValueError:
+            db.session.rollback()
+            return make_response({"errors" : ["validation errors"]}, 400)
+        
+
+api.add_resource(Scientists, '/scientists')
+    
+class ScientistById(Resource):
+    def get(self, id):
+        if scientist := db.session.get(Scientist, id):
+            return make_response(scientist.to_dict(), 200)
+        return make_response({"error": "scientist not found"}, 404)
+    
+    def patch(self, id):
+        scientist_by_id = Scientist.query.filter(Scientist.id==id).first()
+        if  not scientist_by_id:
+            return make_response({"error": "Scientist not found"}, 404)
+        try:
+            for k in request.get_json():
+                setattr(scientist_by_id, k, request.get_json()[k])
+            db.session.add(scientist_by_id)
+            db.session.commit()
+            # db.session.refresh(scientist_by_id)
+            return make_response(scientist_by_id.to_dict(rules=("-missions",)), 202)  
+        except ValueError:
+            db.session.rollback()
+            return make_response({"errors" : ["validation errors"]}, 400)
+            
+    def delete(self, id):
+        try:
+            scientist_by_id = Scientist.query.filter(Scientist.id==id).first()
+            if scientist_by_id:
+                db.session.delete(scientist_by_id)
+                db.session.commit()
+                return make_response({}, 204)
+            else:
+                return make_response({"error" : "Scientist not found"}, 404)
+        except Exception as e:
+            return make_response({"errors" : str(e)})
+
+api.add_resource(ScientistById, '/scientists/<int:id>')
+
+class Planets(Resource):
+    def get(self):
+        planets = [planet.to_dict(rules=("-missions",)) for planet in Planet.query]
+        return make_response(planets, 200)
+
+api.add_resource(Planets, '/planets')
+
+class Missions(Resource):
+    def post(self):
+        try:
+            new_mission = Mission(
+                name = request.get_json()['name'], 
+                scientist_id = request.get_json()['scientist_id'],
+                planet_id = request.get_json()['planet_id']
+            )
+            db.session.add(new_mission)
+            db.session.commit()
+            return make_response(new_mission.to_dict(), 201)
+        except ValueError:
+            db.session.rollback()
+            return make_response({"errors" : ["validation errors"]}, 400)
+
+api.add_resource(Missions, '/missions')  
+    
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
